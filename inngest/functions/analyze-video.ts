@@ -152,51 +152,61 @@ async function generateSection(
     }
   }
 
-  // Try Groq as fallback
+  // Try Groq as fallback (Llama 3.1 or Mixtral)
   if (groq) {
-    try {
-      console.log(`🎯 Trying Groq (fallback) for ${sectionType}`)
+    // Try Llama 3.1 70B first (best quality), then Mixtral (faster)
+    const groqModels = [
+      'llama-3.1-70b-versatile',  // Best quality, good speed
+      'llama-3.1-8b-instant',     // Very fast, good quality
+      'mixtral-8x7b-32768',       // Fast alternative
+    ]
 
-      const completion = await groq.chat.completions.create({
-        model: 'mixtral-8x7b-32768',
-        messages: [
-          {
-            role: 'system',
-            content: prompt,
-          },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.7,
-      })
-
-      const content = completion.choices[0]?.message?.content
-      if (!content) {
-        throw new Error('No content in Groq response')
-      }
-
-      // Parse JSON
-      let json: any
+    for (const model of groqModels) {
       try {
-        const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-        json = JSON.parse(cleaned)
-      } catch (parseError) {
-        throw new Error(`Failed to parse JSON: ${parseError}`)
+        console.log(`🎯 Trying Groq ${model} (fallback) for ${sectionType}`)
+
+        const completion = await groq.chat.completions.create({
+          model,
+          messages: [
+            {
+              role: 'system',
+              content: prompt,
+            },
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.7,
+        })
+
+        const content = completion.choices[0]?.message?.content
+        if (!content) {
+          throw new Error(`No content in Groq ${model} response`)
+        }
+
+        // Parse JSON
+        let json: any
+        try {
+          const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+          json = JSON.parse(cleaned)
+        } catch (parseError) {
+          throw new Error(`Failed to parse JSON: ${parseError}`)
+        }
+
+        // Validate against schema
+        const validated = schema.parse(json)
+
+        // Generate markdown for some sections
+        let markdown: string | undefined
+        if (sectionType === 'FULL_ARTICLE' && 'markdown' in validated) {
+          markdown = validated.markdown
+        }
+
+        console.log(`✅ Groq ${model} succeeded for ${sectionType}`)
+        return { json: validated, markdown }
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error))
+        console.error(`⚠️  Groq ${model} failed for ${sectionType}:`, lastError.message)
+        // Continue to next Groq model
       }
-
-      // Validate against schema
-      const validated = schema.parse(json)
-
-      // Generate markdown for some sections
-      let markdown: string | undefined
-      if (sectionType === 'FULL_ARTICLE' && 'markdown' in validated) {
-        markdown = validated.markdown
-      }
-
-      console.log(`✅ Groq succeeded for ${sectionType}`)
-      return { json: validated, markdown }
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error))
-      console.error(`⚠️  Groq failed for ${sectionType}:`, lastError.message)
     }
   }
 

@@ -4,6 +4,7 @@ import { AssemblyAI } from 'assemblyai'
 import { YoutubeTranscript } from 'youtube-transcript'
 import ytdl from '@distube/ytdl-core'
 import OpenAI from 'openai'
+import Groq from 'groq-sdk'
 
 const assemblyai = new AssemblyAI({
   apiKey: process.env.ASSEMBLYAI_API_KEY || '',
@@ -13,7 +14,11 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
-type TranscriptSource = 'supadata' | 'assemblyai' | 'youtube-transcript' | 'whisper'
+const groq = process.env.GROQ_API_KEY
+  ? new Groq({ apiKey: process.env.GROQ_API_KEY })
+  : null
+
+type TranscriptSource = 'supadata' | 'groq-whisper' | 'assemblyai' | 'youtube-transcript' | 'openai-whisper'
 
 interface TranscriptResult {
   text: string
@@ -55,13 +60,56 @@ async function extractTranscriptWithFallback(youtubeId: string): Promise<Transcr
         return { text: data.content, source: 'supadata' }
       }
     } catch (supadataError) {
-      console.log('⚠️  [Supadata] Failed, trying AssemblyAI...', supadataError)
+      console.log('⚠️  [Supadata] Failed, trying Groq Whisper...', supadataError)
     }
   } else {
     console.log('⚠️  [Supadata] API key not configured, skipping...')
   }
 
-  // Try AssemblyAI second
+  // Try Groq Whisper-large-v3 (very fast, free tier available)
+  if (groq) {
+    try {
+      console.log('🎯 [Groq Whisper] Starting transcription for:', youtubeId)
+
+      // Download audio stream
+      const audioStream = ytdl(videoUrl, {
+        quality: 'lowestaudio',
+        filter: 'audioonly',
+        requestOptions: {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+        },
+      })
+
+      // Convert stream to buffer
+      const chunks: Buffer[] = []
+      for await (const chunk of audioStream) {
+        chunks.push(chunk)
+      }
+      const audioBuffer = Buffer.concat(chunks)
+
+      // Create file for Groq Whisper API
+      const audioFile = new File([audioBuffer], 'audio.mp3', { type: 'audio/mpeg' })
+
+      // Transcribe with Groq Whisper-large-v3 (much faster than OpenAI)
+      const transcription = await groq.audio.transcriptions.create({
+        file: audioFile,
+        model: 'whisper-large-v3',
+        language: 'en', // Optional: specify language for better accuracy
+      })
+
+      console.log('✅ [Groq Whisper] Successfully transcribed:', youtubeId)
+      return { text: transcription.text, source: 'groq-whisper' }
+    } catch (groqError) {
+      console.log('⚠️  [Groq Whisper] Failed, trying AssemblyAI...', groqError)
+    }
+  } else {
+    console.log('⚠️  [Groq Whisper] API key not configured, skipping...')
+  }
+
+  // Try AssemblyAI third
   if (process.env.ASSEMBLYAI_API_KEY) {
     try {
       console.log('🎯 [AssemblyAI] Starting transcription for:', youtubeId)
@@ -128,8 +176,8 @@ async function extractTranscriptWithFallback(youtubeId: string): Promise<Transcr
           model: 'whisper-1',
         })
 
-        console.log('✅ [Whisper] Successfully transcribed:', youtubeId)
-        return { text: transcription.text, source: 'whisper' }
+        console.log('✅ [OpenAI Whisper] Successfully transcribed:', youtubeId)
+        return { text: transcription.text, source: 'openai-whisper' }
       } catch (whisperError) {
         console.error('❌ [Whisper] Transcription failed:', whisperError)
         throw new Error(`Failed to get transcript: ${whisperError}`)
