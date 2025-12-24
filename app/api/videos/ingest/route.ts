@@ -75,8 +75,8 @@ export async function POST(request: NextRequest) {
         where: { videoId: existingVideo.id },
       })
 
-      if (existingTranscript) {
-        // Transcript exists, trigger analysis immediately
+      if (existingTranscript && existingTranscript.text && existingTranscript.text.length > 0) {
+        // Transcript exists with content, trigger analysis immediately
         await inngest.send({
           name: 'video/analyze',
           data: {
@@ -89,7 +89,15 @@ export async function POST(request: NextRequest) {
           data: { status: 'RUNNING' },
         })
       } else {
-        // No transcript, trigger async extraction
+        // No transcript or empty transcript, trigger async extraction
+        // Delete empty transcript if it exists
+        if (existingTranscript && (!existingTranscript.text || existingTranscript.text.length === 0)) {
+          await prisma.transcript.delete({
+            where: { id: existingTranscript.id },
+          })
+          console.log(`🗑️ Deleted empty transcript for video ${existingVideo.id}`)
+        }
+
         await inngest.send({
           name: 'video/extract-transcript',
           data: {

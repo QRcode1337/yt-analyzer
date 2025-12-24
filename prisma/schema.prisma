@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,41 +8,52 @@ datasource db {
 }
 
 model Video {
-  id           String   @id @default(cuid())
-  youtubeId    String   @unique
+  id           String      @id @default(cuid())
+  youtubeId    String      @unique
   title        String
   channel      String
   thumbnailUrl String?
-  duration     Int      // seconds
-  viewCount    BigInt?  // Support videos with billions of views
-  likeCount    BigInt?  // Support videos with billions of likes
-  commentCount BigInt?  // Support videos with billions of comments
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  transcript Transcript?
-  analyses    Analysis[]
+  duration     Int
+  viewCount    BigInt?
+  likeCount    BigInt?
+  commentCount BigInt?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  analyses     Analysis[]
+  transcript   Transcript?
 }
 
 model Transcript {
   id        String   @id @default(cuid())
   videoId   String   @unique
-  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
-  source    String   // "manual" | "youtube" | "upload"
-  text      String   @db.Text
+  source    String
+  text      String
   createdAt DateTime @default(now())
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
 }
 
 model Analysis {
-  id        String         @id @default(cuid())
+  id        String            @id @default(cuid())
   videoId   String
-  video     Video          @relation(fields: [videoId], references: [id], onDelete: Cascade)
-  status    AnalysisStatus @default(PENDING)
-  error     String?        @db.Text
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  status    AnalysisStatus    @default(PENDING)
+  error     String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  video     Video             @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  sections  AnalysisSection[]
+}
 
-  sections AnalysisSection[]
+model AnalysisSection {
+  id         String      @id @default(cuid())
+  analysisId String
+  type       SectionType
+  json       Json
+  markdown   String?
+  createdAt  DateTime    @default(now())
+  analysis   Analysis    @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@unique([analysisId, type])
+  @@index([analysisId, type])
 }
 
 enum AnalysisStatus {
@@ -53,19 +61,6 @@ enum AnalysisStatus {
   RUNNING
   DONE
   FAILED
-}
-
-model AnalysisSection {
-  id         String      @id @default(cuid())
-  analysisId String
-  analysis   Analysis    @relation(fields: [analysisId], references: [id], onDelete: Cascade)
-  type       SectionType
-  json       Json        // Validated Zod output
-  markdown   String?     @db.Text // Optional formatted text
-  createdAt  DateTime    @default(now())
-
-  @@unique([analysisId, type])
-  @@index([analysisId, type])
 }
 
 enum SectionType {
@@ -78,4 +73,3 @@ enum SectionType {
   CONTENT_HIGHLIGHTS
   FULL_ARTICLE
 }
-

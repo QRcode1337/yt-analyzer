@@ -1,3 +1,5 @@
+const path = require('path')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -22,7 +24,7 @@ const nextConfig = {
     removeConsole: process.env.NODE_ENV === 'production',
   },
   turbopack: {
-    root: process.cwd(),
+    root: path.resolve(__dirname),
   },
 }
 
