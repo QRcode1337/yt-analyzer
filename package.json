@@ -26,6 +26,7 @@
     "assemblyai": "^4.22.1",
     "clsx": "^2.1.0",
     "googleapis": "^128.0.0",
+    "groq-sdk": "^0.37.0",
     "inngest": "^3.12.0",
     "next": "^16.1.1",
     "openai": "^4.20.1",

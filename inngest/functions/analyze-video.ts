@@ -1,6 +1,7 @@
 import { inngest } from '@/lib/inngest'
 import { prisma } from '@/lib/prisma'
 import OpenAI from 'openai'
+import Groq from 'groq-sdk'
 import {
   sectionSchemas,
   type SectionType,
@@ -16,14 +17,20 @@ import {
   getOverviewPrompt,
 } from '@/lib/prompts/section-prompts'
 
-// Validate OpenAI API key
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error('OPENAI_API_KEY environment variable is not set')
-}
+// Initialize OpenAI client (primary)
+const openai = process.env.OPENAI_API_KEY
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+// Initialize Groq client (fallback)
+const groq = process.env.GROQ_API_KEY
+  ? new Groq({ apiKey: process.env.GROQ_API_KEY })
+  : null
+
+// Validate at least one AI provider is available
+if (!openai && !groq) {
+  throw new Error('At least one of OPENAI_API_KEY or GROQ_API_KEY must be set')
+}
 
 const SECTION_TYPES: SectionType[] = [
   'OVERVIEW',
@@ -48,7 +55,7 @@ const PROMPT_FUNCTIONS = {
 } as const
 
 /**
- * Generate a single analysis section using OpenAI
+ * Generate a single analysis section using OpenAI (primary) or Groq (fallback)
  *
  * @param sectionType - The type of section to generate (e.g., 'HEROS_JOURNEY', 'MONEY_SHOTS')
  * @param video - Video metadata including title, channel, stats, and duration
@@ -57,9 +64,10 @@ const PROMPT_FUNCTIONS = {
  * @throws Error if prompt function not found or validation fails after retries
  *
  * @remarks
+ * - Tries OpenAI first (gpt-4o), falls back to Groq (mixtral-8x7b-32768) if OpenAI fails
  * - Automatically retries once on failure with validation error feedback
  * - Response is validated against the corresponding Zod schema
- * - Uses GPT-4 Turbo with JSON mode for structured output
+ * - Uses JSON mode for structured output
  */
 async function generateSection(
   sectionType: SectionType,
@@ -93,10 +101,13 @@ async function generateSection(
 
   const schema = sectionSchemas[sectionType]
 
-  // Retry logic: try up to 2 times
   let lastError: Error | null = null
-  for (let attempt = 0; attempt < 2; attempt++) {
+
+  // Try OpenAI first
+  if (openai) {
     try {
+      console.log(`🎯 Trying OpenAI for ${sectionType}`)
+
       const completion = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [
@@ -117,7 +128,6 @@ async function generateSection(
       // Parse JSON
       let json: any
       try {
-        // Remove markdown code blocks if present
         const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
         json = JSON.parse(cleaned)
       } catch (parseError) {
@@ -133,21 +143,64 @@ async function generateSection(
         markdown = validated.markdown
       }
 
+      console.log(`✅ OpenAI succeeded for ${sectionType}`)
       return { json: validated, markdown }
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error))
-      console.error(`Attempt ${attempt + 1} failed for ${sectionType}:`, error)
-
-      // If validation failed, add fix instructions to prompt for retry
-      if (attempt === 0 && error instanceof Error) {
-        const fixInstruction = `\n\nPrevious attempt failed validation: ${error.message}. Please fix the JSON to match the schema exactly.`
-        // Note: We'd need to modify the prompt function to accept additional instructions
-        // For now, we'll just retry with the same prompt
-      }
+      console.error(`⚠️  OpenAI failed for ${sectionType}:`, lastError.message)
+      // Continue to Groq fallback
     }
   }
 
-  throw lastError || new Error(`Failed to generate ${sectionType} after 2 attempts`)
+  // Try Groq as fallback
+  if (groq) {
+    try {
+      console.log(`🎯 Trying Groq (fallback) for ${sectionType}`)
+
+      const completion = await groq.chat.completions.create({
+        model: 'mixtral-8x7b-32768',
+        messages: [
+          {
+            role: 'system',
+            content: prompt,
+          },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.7,
+      })
+
+      const content = completion.choices[0]?.message?.content
+      if (!content) {
+        throw new Error('No content in Groq response')
+      }
+
+      // Parse JSON
+      let json: any
+      try {
+        const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+        json = JSON.parse(cleaned)
+      } catch (parseError) {
+        throw new Error(`Failed to parse JSON: ${parseError}`)
+      }
+
+      // Validate against schema
+      const validated = schema.parse(json)
+
+      // Generate markdown for some sections
+      let markdown: string | undefined
+      if (sectionType === 'FULL_ARTICLE' && 'markdown' in validated) {
+        markdown = validated.markdown
+      }
+
+      console.log(`✅ Groq succeeded for ${sectionType}`)
+      return { json: validated, markdown }
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+      console.error(`⚠️  Groq failed for ${sectionType}:`, lastError.message)
+    }
+  }
+
+  throw lastError || new Error(`Failed to generate ${sectionType} with all providers`)
 }
 
 export const analyzeVideo = inngest.createFunction(
