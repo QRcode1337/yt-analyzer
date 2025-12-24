@@ -7,10 +7,13 @@ export function cn(...inputs: ClassValue[]) {
 
 /**
  * Format numbers with locale-aware formatting
+ * Supports BigInt for videos with billions of views/likes
  */
-export function formatNumber(num: number | null | undefined): string {
+export function formatNumber(num: number | bigint | null | undefined): string {
   if (num === null || num === undefined) return '0'
-  return num.toLocaleString()
+  // Convert BigInt to Number for formatting (safe for display purposes)
+  const numValue = typeof num === 'bigint' ? Number(num) : num
+  return numValue.toLocaleString()
 }
 
 /**

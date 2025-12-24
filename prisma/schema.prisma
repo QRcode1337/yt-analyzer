@@ -17,9 +17,9 @@ model Video {
   channel      String
   thumbnailUrl String?
   duration     Int      // seconds
-  viewCount    Int?
-  likeCount    Int?
-  commentCount Int?
+  viewCount    BigInt?  // Support videos with billions of views
+  likeCount    BigInt?  // Support videos with billions of likes
+  commentCount BigInt?  // Support videos with billions of comments
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
