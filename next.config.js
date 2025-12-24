@@ -22,7 +22,7 @@ const nextConfig = {
     removeConsole: process.env.NODE_ENV === 'production',
   },
   turbopack: {
-    root: '/Users/patrickgallowaypro/Documents/PROJECTS/yt-analyzer',
+    root: process.cwd(),
   },
 }
 
