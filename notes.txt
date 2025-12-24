@@ -1,0 +1,297 @@
+
+ Here is Claude's plan:
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ Next.js 15 Upgrade Plan for yt-analyzer
+
+ Current State Analysis
+
+ Current Versions:
+ - Next.js: ^14.2.35
+ - React: ^18.2.0
+ - React DOM: ^18.2.0
+ - eslint-config-next: 14.0.4
+
+ Target Versions:
+ - Next.js: ^15.1.0 (latest stable) ⬆️
+ - React: ^18.2.0 (keeping current version) ✅
+ - React DOM: ^18.2.0 (keeping current version) ✅
+ - eslint-config-next: 15.1.0 (match Next.js version) ⬆️
+
+ Codebase Health Assessment ✅
+
+ Excellent modernization status - The codebase uses best practices:
+ - ✅ App Router (no Pages Router legacy)
+ - ✅ Proper server/client component separation
+ - ✅ Modern API route handlers with typed params
+ - ✅ No deprecated patterns or APIs
+ - ✅ SWC compiler (no Babel)
+ - ✅ TypeScript with proper Next.js configuration
+
+ Key Usage Patterns:
+ - Image optimization with next/image (app/analysis/[id]/AnalysisPageClient.tsx:165-172)
+ - 6 API route handlers using NextRequest/NextResponse
+ - Server components with Prisma data fetching
+ - Client components with useRouter from next/navigation
+ - Metadata API in app/layout.tsx
+
+ Breaking Changes in Next.js 15
+
+ 1. Image Configuration (next.config.js)
+
+ REQUIRED CHANGE ⚠️
+
+ Current (Deprecated in v15):
+ images: {
+   domains: ['i.ytimg.com', 'img.youtube.com'],
+ }
+
+ New (Required):
+ images: {
+   remotePatterns: [
+     {
+       protocol: 'https',
+       hostname: 'i.ytimg.com',
+     },
+     {
+       protocol: 'https',
+       hostname: 'img.youtube.com',
+     },
+   ],
+ }
+
+ Impact: Image optimization will fail for YouTube thumbnails without this change
+
+ 2. Async Request APIs (Minimal Impact)
+
+ Next.js 15 Changes:
+ - params, searchParams are now promises in some contexts
+ - cookies(), headers() from next/headers are async
+
+ Current Usage:
+ - ✅ Already using async/await in server components
+ - ✅ Route handlers properly await params
+
+ Action Required: Verify no issues after upgrade, likely no changes needed
+
+ 3. fetch() Caching Behavior
+
+ Next.js 15 Change: fetch() no longer caches by default (was opt-out, now opt-in)
+
+ Current Usage:
+ - Project doesn't use fetch() for data fetching
+ - Uses Prisma directly in server components
+ - Uses OpenAI SDK and googleapis
+
+ Action Required: None - no fetch() calls to modify
+
+ Upgrade Strategy
+
+ Phase 1: Preparation (Read-Only)
+
+ 1. ✅ Analyze current Next.js usage patterns (COMPLETED)
+ 2. Review dependencies for Next.js 15 compatibility
+ 3. Check test suite compatibility
+ 4. Review Vercel deployment configuration
+
+ Phase 2: Core Upgrade
+
+ Files to Modify:
+ 1. package.json - Update Next.js and eslint-config-next versions
+ 2. next.config.js - Migrate image domains to remotePatterns
+
+ Dependencies to Update:
+ {
+   "dependencies": {
+     "next": "^15.1.0"  // from ^14.2.35
+   },
+   "devDependencies": {
+     "eslint-config-next": "15.1.0"  // from 14.0.4
+   }
+ }
+
+ Phase 3: Configuration Migration
+
+ next.config.js Changes:
+ /** @type {import('next').NextConfig} */
+ const nextConfig = {
+   images: {
+     // NEW: remotePatterns replaces domains
+     remotePatterns: [
+       {
+         protocol: 'https',
+         hostname: 'i.ytimg.com',
+       },
+       {
+         protocol: 'https',
+         hostname: 'img.youtube.com',
+       },
+     ],
+     formats: ['image/avif', 'image/webp'],
+     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+   },
+   compress: true,
+   poweredByHeader: false,
+   reactStrictMode: true,
+   swcMinify: true,
+   compiler: {
+     removeConsole: process.env.NODE_ENV === 'production',
+   },
+ }
+
+ module.exports = nextConfig
+
+ Phase 4: Validation
+
+ Testing Checklist:
+ - Run npm install to update dependencies
+ - Run npm run build to verify build succeeds
+ - Run npm run dev and test local development
+ - Verify image loading on analysis pages (YouTube thumbnails)
+ - Test API routes functionality:
+   - POST /api/videos/ingest
+   - GET /api/analysis/[id]
+   - POST /api/analysis/[id]/run
+ - Run npm run lint to check for new linting issues
+ - Run npm run test to verify test suite passes
+ - Test production build: npm run build && npm run start
+ - Deploy to Vercel and test production environment
+ - Verify Inngest webhook integration still works
+ - Check Prisma integration (no changes expected)
+
+ Phase 5: Deployment
+
+ Deployment Steps:
+ 1. Create feature branch: git checkout -b upgrade/nextjs-15
+ 2. Apply all changes
+ 3. Run full test suite locally
+ 4. Commit changes with descriptive message
+ 5. Push to GitHub and create PR
+ 6. Deploy to Vercel preview environment
+ 7. Test preview deployment thoroughly
+ 8. Merge to main and deploy to production
+ 9. Monitor production logs and error tracking
+
+ Risk Assessment
+
+ Low Risk ✅
+ - Clean, modern codebase with no deprecated patterns
+ - Minimal breaking changes affecting this project
+ - Main change is straightforward image config migration
+ - No Pages Router legacy code to migrate
+ - Strong type safety with TypeScript
+
+ Migration Complexity: 2/10 (Very Low)
+ - Primary change: Image domains → remotePatterns
+ - Secondary: Dependency version updates
+ - Tertiary: Validation and testing
+
+ Compatibility Review
+
+ Dependencies Compatibility with Next.js 15
+
+ Critical Dependencies:
+ - ✅ @prisma/client@5.7.1 - Compatible
+ - ✅ @vercel/analytics@1.6.1 - Compatible
+ - ✅ inngest@3.12.0 - Compatible
+ - ✅ openai@4.20.1 - Compatible
+ - ✅ tailwindcss@3.4.0 - Compatible
+ - ✅ typescript@5.3.3 - Compatible
+ - ✅ vitest@4.0.16 - Compatible
+
+ No compatibility issues detected ✅
+
+ Optional Enhancements (Post-Upgrade)
+
+ 1. React 19 Upgrade (Future Enhancement)
+
+ Wait for stable ecosystem adoption before upgrading React.
+
+ When to upgrade:
+ - Major dependencies support React 19
+ - Testing library updates released
+ - Community consensus on stability
+
+ 2. Enhanced Image Configuration
+
+ Add more granular remote pattern controls:
+ remotePatterns: [
+   {
+     protocol: 'https',
+     hostname: 'i.ytimg.com',
+     pathname: '/vi/**',  // Only allow thumbnail paths
+   },
+ ]
+
+ 3. Dynamic Metadata Generation
+
+ Add generateMetadata to analysis pages for better SEO:
+ // app/analysis/[id]/page.tsx
+ export async function generateMetadata({ params }): Promise<Metadata> {
+   const analysis = await prisma.analysis.findUnique({
+     where: { id: params.id },
+     include: { video: true },
+   })
+
+   return {
+     title: `${analysis.video.title} - Analysis`,
+     description: analysis.sections.OVERVIEW,
+     openGraph: {
+       images: [analysis.video.thumbnailUrl],
+     },
+   }
+ }
+
+ 4. Partial Prerendering (Experimental)
+
+ Consider enabling PPR for better performance:
+ // next.config.js
+ experimental: {
+   ppr: true,
+ }
+
+ Rollback Plan
+
+ If issues occur:
+ 1. Revert package.json changes
+ 2. Run npm install to restore previous versions
+ 3. Revert next.config.js to original domains configuration
+ 4. Redeploy previous working version
+ 5. Investigate issues before retry
+
+ Rollback Time: < 5 minutes
+ Data Loss Risk: None (no database migrations)
+
+ User Decision: Conservative Approach ✅
+
+ Selected Strategy: Keep React 18.2.0 while upgrading Next.js to 15
+
+ Rationale:
+ - Lower risk upgrade path
+ - Proven ecosystem stability
+ - No testing library compatibility concerns
+ - Can upgrade React 19 later when ready
+
+ React 19 Future Upgrade: Planned for separate upgrade cycle after Next.js 15 is stable
+
+ Summary
+
+ Upgrade Complexity: Very Low
+ Breaking Changes: 1 (image domains → remotePatterns)
+ Time Estimate: 15-30 minutes
+ Risk Level: Low
+ Testing Required: Moderate
+ Rollback Difficulty: Very Easy
+
+ Primary Benefit: Access to Next.js 15 performance improvements, React 19 support readiness, and continued framework
+ maintenance
+
+ Files to Modify:
+ 1. /Users/patrickgallowaypro/Documents/PROJECTS/yt-analyzer/package.json
+ 2. /Users/patrickgallowaypro/Documents/PROJECTS/yt-analyzer/next.config.js
+
+ Commands to Run:
+ 1. npm install - Update dependencies
+ 2. npm run build - Verify build
+ 3. npm run test - Run test suite
+ 4. npm run lint - Check linting

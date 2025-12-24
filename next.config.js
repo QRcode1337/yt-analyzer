@@ -1,5 +1,3 @@
-const path = require('path')
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -23,10 +21,8 @@ const nextConfig = {
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production',
   },
-  experimental: {
-    turbo: {
-      root: path.resolve(__dirname),
-    },
+  turbopack: {
+    root: '/Users/patrickgallowaypro/Documents/PROJECTS/yt-analyzer',
   },
 }
 
