@@ -1,0 +1,81 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Video {
+  id           String   @id @default(cuid())
+  youtubeId    String   @unique
+  title        String
+  channel      String
+  thumbnailUrl String?
+  duration     Int      // seconds
+  viewCount    Int?
+  likeCount    Int?
+  commentCount Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  transcript Transcript?
+  analyses    Analysis[]
+}
+
+model Transcript {
+  id        String   @id @default(cuid())
+  videoId   String   @unique
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  source    String   // "manual" | "youtube" | "upload"
+  text      String   @db.Text
+  createdAt DateTime @default(now())
+}
+
+model Analysis {
+  id        String         @id @default(cuid())
+  videoId   String
+  video     Video          @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  status    AnalysisStatus @default(PENDING)
+  error     String?        @db.Text
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  sections AnalysisSection[]
+}
+
+enum AnalysisStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+model AnalysisSection {
+  id         String      @id @default(cuid())
+  analysisId String
+  analysis   Analysis    @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  type       SectionType
+  json       Json        // Validated Zod output
+  markdown   String?     @db.Text // Optional formatted text
+  createdAt  DateTime    @default(now())
+
+  @@unique([analysisId, type])
+  @@index([analysisId, type])
+}
+
+enum SectionType {
+  OVERVIEW
+  HEROS_JOURNEY
+  EMOTION_ROLLERCOASTER
+  MONEY_SHOTS
+  TITLE_DECODE
+  THUMBNAIL_XRAY
+  CONTENT_HIGHLIGHTS
+  FULL_ARTICLE
+}
+
