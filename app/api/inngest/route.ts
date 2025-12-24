@@ -12,5 +12,6 @@ export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [analyzeVideo, extractTranscript],
   streaming: 'force',
+  signingKey: process.env.INNGEST_SIGNING_KEY,
 })
 
