@@ -176,8 +176,9 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error ingesting video:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
-      { error: 'Failed to ingest video' },
+      { error: 'Failed to ingest video', details: message },
       { status: 500 }
     )
   }
