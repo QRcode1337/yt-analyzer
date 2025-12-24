@@ -6,5 +6,6 @@ import { extractTranscript } from '@/inngest/functions/extract-transcript'
 export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [analyzeVideo, extractTranscript],
+  streaming: 'force',
 })
 
